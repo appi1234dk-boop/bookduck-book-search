@@ -104,6 +104,7 @@ export async function createPage(
     method: 'POST',
     body: JSON.stringify({
       parent: { database_id: databaseId },
+      icon: { type: 'emoji', emoji: '📖' },
       properties,
     }),
   })
