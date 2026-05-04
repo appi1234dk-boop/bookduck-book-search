@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getUser } from '@/lib/sheetsClient'
 import { createPage, NotionTokenExpiredError } from '@/lib/notion'
 
 export async function POST(request: NextRequest) {
@@ -8,25 +8,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing user id' }, { status: 400 })
   }
 
-  // Get user from Supabase
-  const supabase = getSupabase()
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('notion_access_token, selected_database_id')
-    .eq('widget_user_id', userId)
-    .single()
-
-  if (error || !user) {
+  const user = await getUser(userId)
+  if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  if (!user.selected_database_id) {
+  if (!user.selectedDatabaseId) {
     return NextResponse.json({ error: 'No database selected' }, { status: 400 })
   }
 
   try {
     const body = await request.json()
-    const pageId = await createPage(user.notion_access_token, user.selected_database_id, {
+    const pageId = await createPage(user.notionAccessToken, user.selectedDatabaseId, {
       title: body.title || '',
       authors: body.authors || '',
       publisher: body.publisher || '',

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { upsertUser } from '@/lib/sheetsClient'
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
@@ -60,23 +60,16 @@ export async function GET(request: NextRequest) {
 
     const tokenData = await tokenRes.json()
 
-    // Upsert user in Supabase
-    const supabase = getSupabase()
-    const { error: dbError } = await supabase
-      .from('users')
-      .upsert({
-        widget_user_id: userId,
-        notion_access_token: tokenData.access_token,
-        notion_workspace_id: tokenData.workspace_id,
-        notion_workspace_name: tokenData.workspace_name,
-        notion_bot_id: tokenData.bot_id,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'widget_user_id',
+    try {
+      await upsertUser({
+        widgetUserId: userId,
+        notionAccessToken: tokenData.access_token,
+        notionWorkspaceId: tokenData.workspace_id,
+        notionWorkspaceName: tokenData.workspace_name,
+        notionBotId: tokenData.bot_id,
       })
-
-    if (dbError) {
-      console.error('Supabase upsert error:', dbError)
+    } catch (dbErr) {
+      console.error('Sheets upsert error:', dbErr)
       return new NextResponse(closePopupHtml('연결에 실패했어요. 다시 시도해주세요'), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       })

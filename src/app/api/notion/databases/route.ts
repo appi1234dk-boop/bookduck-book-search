@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getUser } from '@/lib/sheetsClient'
 import { searchDatabases, getDatabasePageCount, NotionTokenExpiredError } from '@/lib/notion'
 
 export async function GET(request: NextRequest) {
@@ -8,26 +8,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing user id' }, { status: 400 })
   }
 
-  // Get user token from Supabase
-  const supabase = getSupabase()
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('notion_access_token')
-    .eq('widget_user_id', userId)
-    .single()
-
-  if (error || !user) {
+  const user = await getUser(userId)
+  if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
   try {
-    const databases = await searchDatabases(user.notion_access_token)
+    const databases = await searchDatabases(user.notionAccessToken)
 
-    // Fetch page counts in parallel
     const withCounts = await Promise.all(
       databases.map(async (db: { id: string; title: string; icon: string }) => {
         try {
-          const pageCount = await getDatabasePageCount(user.notion_access_token, db.id)
+          const pageCount = await getDatabasePageCount(user.notionAccessToken, db.id)
           return { ...db, pageCount }
         } catch {
           return { ...db, pageCount: 0 }
