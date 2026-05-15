@@ -10,23 +10,32 @@ export async function GET(request: NextRequest) {
   const existing = getWidgetUserIdFromRequest(request)
 
   if (!existing) {
-    // First visit (or cookie was wiped). Mint a new id, return disconnected.
+    // First visit (or cookie+header both missing). Mint a new id; client mirrors it
+    // into localStorage so subsequent requests can include it as a header fallback if
+    // the cookie doesn't persist.
     const userId = generateWidgetUserId()
-    const res = NextResponse.json({ connected: false })
+    const res = NextResponse.json({ connected: false, userId })
     setWidgetUserIdCookie(res, userId)
     return res
   }
 
   const user = await getUser(existing)
   if (!user) {
-    return NextResponse.json({ connected: false })
+    // Identifier known but no DB row yet (post-mint, pre-OAuth, or row wiped).
+    const res = NextResponse.json({ connected: false, userId: existing })
+    // Refresh the cookie in case it's the header path that carried the id this time.
+    setWidgetUserIdCookie(res, existing)
+    return res
   }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     connected: true,
+    userId: existing,
     selectedDatabaseId: user.selectedDatabaseId || null,
     workspaceName: user.notionWorkspaceName,
   })
+  setWidgetUserIdCookie(res, existing)
+  return res
 }
 
 export async function PATCH(request: NextRequest) {

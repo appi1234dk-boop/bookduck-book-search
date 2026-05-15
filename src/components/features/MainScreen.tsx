@@ -8,6 +8,7 @@ import BookCard from '@/components/features/BookCard'
 import SettingsMenu from '@/components/features/SettingsMenu'
 import Button from '@/components/ui/Button'
 import { MESSAGES, SEARCH_PAGE_SIZE } from '@/constants'
+import { widgetHeaders } from '@/lib/clientSession'
 import type { Book, BookCardStatus, BannerState, SearchMeta } from '@/types'
 
 interface MainScreenProps {
@@ -69,7 +70,7 @@ export default function MainScreen({
       const res = await fetch('/api/create', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: widgetHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           title: book.title, authors: book.authors.join(', '), publisher: book.publisher,
           datetime: book.datetime, isbn: book.isbn, thumbnail: book.thumbnail,

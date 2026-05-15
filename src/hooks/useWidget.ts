@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Screen, NotionDatabase, BannerState } from '@/types'
+import { setStoredUserId, widgetHeaders } from '@/lib/clientSession'
 
 interface UserStatus {
   connected: boolean
   selectedDatabaseId: string | null
+  userId?: string
 }
 
 export default function useWidget() {
@@ -23,34 +25,48 @@ export default function useWidget() {
   // handleConnect is referenced by fetchDatabases' 401 banner; use a ref to break the cycle.
   const handleConnectRef = useRef<() => void>(() => {})
 
+  const rememberUserId = useCallback((id: string | undefined | null) => {
+    if (id) setStoredUserId(id)
+  }, [])
+
   const checkUser = useCallback(async (): Promise<UserStatus | null> => {
     try {
-      const res = await fetch('/api/user', { credentials: 'include' })
+      const res = await fetch('/api/user', {
+        credentials: 'include',
+        headers: widgetHeaders(),
+      })
       if (!res.ok) return null
-      return (await res.json()) as UserStatus
+      const data = (await res.json()) as UserStatus
+      rememberUserId(data.userId)
+      return data
     } catch {
       return null
     }
-  }, [])
+  }, [rememberUserId])
 
   const prefetchAuthUrl = useCallback(async () => {
     try {
       const res = await fetch('/api/notion/auth', {
         method: 'POST',
         credentials: 'include',
+        headers: widgetHeaders(),
       })
       if (!res.ok) return
       const data = await res.json()
+      rememberUserId(data?.userId)
       if (data?.authUrl) setAuthUrl(data.authUrl)
     } catch {
       // Silent: the connect button will show an error banner if user clicks before this resolves.
     }
-  }, [])
+  }, [rememberUserId])
 
   const fetchDatabases = useCallback(async () => {
     setDbLoading(true)
     try {
-      const res = await fetch('/api/notion/databases', { credentials: 'include' })
+      const res = await fetch('/api/notion/databases', {
+        credentials: 'include',
+        headers: widgetHeaders(),
+      })
       if (res.status === 401) {
         setBanner({
           type: 'warning',
@@ -82,7 +98,8 @@ export default function useWidget() {
     return true
   }, [fetchDatabases])
 
-  // Initialize
+  // Initialize. widgetHeaders() reads localStorage on demand, so the very first request
+  // already carries the stored id (if any) as a header fallback to the cookie path.
   useEffect(() => {
     async function init() {
       const data = await checkUser()
@@ -160,7 +177,7 @@ export default function useWidget() {
       const res = await fetch('/api/user', {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: widgetHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ selectedDatabaseId: databaseId }),
       })
       if (!res.ok) throw new Error('Failed to select database')
