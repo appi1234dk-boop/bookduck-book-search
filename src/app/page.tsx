@@ -4,6 +4,7 @@ import useWidget from '@/hooks/useWidget'
 import OnboardingScreen from '@/components/features/OnboardingScreen'
 import DbSelectScreen from '@/components/features/DbSelectScreen'
 import MainScreen from '@/components/features/MainScreen'
+import StatusBanner from '@/components/ui/StatusBanner'
 
 export default function WidgetPage() {
   const {
@@ -22,8 +23,21 @@ export default function WidgetPage() {
     )
   }
 
+  // Banner rendered at the page level so popup-blocked / auth-failed feedback
+  // surfaces on onboarding and db-select too, not only on main.
+  const showBannerAtTop = banner && screen !== 'main'
+
   return (
     <div style={{ height: '100vh', minHeight: 300, maxHeight: 600 }}>
+      {showBannerAtTop && (
+        <StatusBanner
+          type={banner.type}
+          message={banner.message}
+          action={banner.action}
+          autoDismiss={banner.type === 'success'}
+          onDismiss={dismissBanner}
+        />
+      )}
       {screen === 'onboarding' && <OnboardingScreen onConnect={handleConnect} />}
       {screen === 'db-select' && <DbSelectScreen databases={databases} loading={dbLoading} onSelect={handleSelectDb} />}
       {screen === 'main' && (

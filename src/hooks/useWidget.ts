@@ -14,6 +14,11 @@ export default function useWidget() {
   const [databases, setDatabases] = useState<NotionDatabase[]>([])
   const [dbLoading, setDbLoading] = useState(false)
   const [banner, setBanner] = useState<BannerState | null>(null)
+  // Pre-fetched so the connect-click can call window.open() synchronously inside the
+  // gesture handler. An await between the click and window.open is silently blocked by
+  // Safari (and increasingly by Chrome) in cross-site iframes — even the about:blank
+  // pre-open trick fails on some Safari versions. Pre-fetching sidesteps the issue.
+  const [authUrl, setAuthUrl] = useState<string | null>(null)
 
   // handleConnect is referenced by fetchDatabases' 401 banner; use a ref to break the cycle.
   const handleConnectRef = useRef<() => void>(() => {})
@@ -28,6 +33,20 @@ export default function useWidget() {
     }
   }, [])
 
+  const prefetchAuthUrl = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notion/auth', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.authUrl) setAuthUrl(data.authUrl)
+    } catch {
+      // Silent: the connect button will show an error banner if user clicks before this resolves.
+    }
+  }, [])
+
   const fetchDatabases = useCallback(async () => {
     setDbLoading(true)
     try {
@@ -39,6 +58,7 @@ export default function useWidget() {
           action: { label: '다시 연결', onClick: () => handleConnectRef.current() },
         })
         setScreen('onboarding')
+        prefetchAuthUrl()
         return
       }
       if (!res.ok) throw new Error('Failed to fetch databases')
@@ -49,7 +69,7 @@ export default function useWidget() {
     } finally {
       setDbLoading(false)
     }
-  }, [])
+  }, [prefetchAuthUrl])
 
   // Initialize
   useEffect(() => {
@@ -57,6 +77,7 @@ export default function useWidget() {
       const data = await checkUser()
       if (!data || !data.connected) {
         setScreen('onboarding')
+        prefetchAuthUrl()
       } else if (!data.selectedDatabaseId) {
         setScreen('db-select')
         fetchDatabases()
@@ -66,14 +87,21 @@ export default function useWidget() {
       setLoading(false)
     }
     init()
-  }, [checkUser, fetchDatabases])
+  }, [checkUser, fetchDatabases, prefetchAuthUrl])
 
-  const handleConnect = useCallback(async () => {
-    // Popup must open synchronously inside the click handler — `await fetch()` first then
-    // `window.open()` is silently blocked by Safari/Chrome popup blockers, especially in
-    // Notion's cross-site iframe. We pre-open `about:blank` to claim the user gesture,
-    // then navigate it once the auth URL is ready.
-    const popup = window.open('about:blank', 'notion-auth', 'width=500,height=700')
+  const handleConnect = useCallback(() => {
+    if (!authUrl) {
+      setBanner({
+        type: 'error',
+        message: '연결 준비 중이에요. 잠시 후 다시 시도해주세요',
+      })
+      prefetchAuthUrl()
+      return
+    }
+
+    // Synchronous: window.open is called directly from the click handler with the
+    // final URL, so the user-gesture credit reaches it intact.
+    const popup = window.open(authUrl, 'notion-auth', 'width=500,height=700')
     if (!popup) {
       setBanner({
         type: 'error',
@@ -82,22 +110,8 @@ export default function useWidget() {
       return
     }
 
-    try {
-      const res = await fetch('/api/notion/auth', {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (!res.ok) throw new Error('Failed to start auth')
-      const data = await res.json()
-      popup.location.href = data.authUrl
-    } catch {
-      popup.close()
-      setBanner({ type: 'error', message: '연결을 시작할 수 없어요. 다시 시도해주세요' })
-      return
-    }
-
     const interval = setInterval(async () => {
-      if (popup?.closed) {
+      if (popup.closed) {
         clearInterval(interval)
         const data = await checkUser()
         if (data?.connected) {
@@ -107,12 +121,15 @@ export default function useWidget() {
             setScreen('db-select')
             fetchDatabases()
           }
+        } else {
+          // OAuth failed or cancelled — refresh the URL so a retry doesn't reuse a stale state.
+          prefetchAuthUrl()
         }
       }
     }, 500)
 
     setTimeout(() => clearInterval(interval), 300000)
-  }, [checkUser, fetchDatabases])
+  }, [authUrl, checkUser, fetchDatabases, prefetchAuthUrl])
 
   // Keep ref in sync so the 401 banner action calls the latest handler.
   useEffect(() => {
