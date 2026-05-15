@@ -7,7 +7,7 @@ import MainScreen from '@/components/features/MainScreen'
 
 export default function WidgetPage() {
   const {
-    screen, userId, loading, databases, dbLoading, banner,
+    screen, loading, databases, dbLoading, banner,
     handleConnect, handleSelectDb, handleChangeDb, handleReconnect, dismissBanner,
   } = useWidget()
 
@@ -28,7 +28,7 @@ export default function WidgetPage() {
       {screen === 'db-select' && <DbSelectScreen databases={databases} loading={dbLoading} onSelect={handleSelectDb} />}
       {screen === 'main' && (
         <MainScreen
-          userId={userId} banner={banner} onBannerDismiss={dismissBanner}
+          banner={banner} onBannerDismiss={dismissBanner}
           onReconnect={handleReconnect} onChangeDb={handleChangeDb}
         />
       )}

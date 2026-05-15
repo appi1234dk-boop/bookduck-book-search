@@ -26,7 +26,6 @@ export const MESSAGES = {
   ADDED_SUCCESS: '추가됐어요',
 } as const
 
-export const WIDGET_USER_ID_KEY = 'notion_book_widget_user_id'
 export const SEARCH_DEBOUNCE_MS = 300
 export const SEARCH_PAGE_SIZE = 10
 export const BANNER_AUTO_DISMISS_MS = 3000

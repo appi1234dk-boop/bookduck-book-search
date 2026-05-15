@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUser } from '@/lib/sheetsClient'
 import { searchDatabases, getDatabasePageCount, NotionTokenExpiredError } from '@/lib/notion'
+import { getWidgetUserIdFromRequest } from '@/lib/session'
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-widget-user-id')
+  const userId = getWidgetUserIdFromRequest(request)
   if (!userId) {
-    return NextResponse.json({ error: 'Missing user id' }, { status: 400 })
+    return NextResponse.json({ error: 'No session' }, { status: 400 })
   }
 
   const user = await getUser(userId)

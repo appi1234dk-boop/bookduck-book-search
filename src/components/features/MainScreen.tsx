@@ -11,7 +11,6 @@ import { MESSAGES, SEARCH_PAGE_SIZE } from '@/constants'
 import type { Book, BookCardStatus, BannerState, SearchMeta } from '@/types'
 
 interface MainScreenProps {
-  userId: string
   banner: BannerState | null
   onBannerDismiss: () => void
   onReconnect: () => void
@@ -19,7 +18,6 @@ interface MainScreenProps {
 }
 
 export default function MainScreen({
-  userId,
   banner,
   onBannerDismiss,
   onReconnect,
@@ -70,7 +68,8 @@ export default function MainScreen({
     try {
       const res = await fetch('/api/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-widget-user-id': userId },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: book.title, authors: book.authors.join(', '), publisher: book.publisher,
           datetime: book.datetime, isbn: book.isbn, thumbnail: book.thumbnail,
@@ -83,7 +82,7 @@ export default function MainScreen({
     } catch {
       setAddingBooks((prev) => ({ ...prev, [bookKey]: 'default' }))
     }
-  }, [userId, onReconnect])
+  }, [onReconnect])
 
   const getBookStatus = (index: number, book: Book): BookCardStatus => {
     return addingBooks[`${index}-${book.isbn}`] || 'default'

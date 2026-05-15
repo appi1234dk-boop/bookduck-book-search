@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUser, updateSelectedDatabase } from '@/lib/sheetsClient'
+import {
+  generateWidgetUserId,
+  getWidgetUserIdFromRequest,
+  setWidgetUserIdCookie,
+} from '@/lib/session'
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-widget-user-id')
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing user id' }, { status: 400 })
+  const existing = getWidgetUserIdFromRequest(request)
+
+  if (!existing) {
+    // First visit (or cookie was wiped). Mint a new id, return disconnected.
+    const userId = generateWidgetUserId()
+    const res = NextResponse.json({ connected: false })
+    setWidgetUserIdCookie(res, userId)
+    return res
   }
 
-  const user = await getUser(userId)
+  const user = await getUser(existing)
   if (!user) {
     return NextResponse.json({ connected: false })
   }
@@ -20,9 +30,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const userId = request.headers.get('x-widget-user-id')
+  const userId = getWidgetUserIdFromRequest(request)
   if (!userId) {
-    return NextResponse.json({ error: 'Missing user id' }, { status: 400 })
+    return NextResponse.json({ error: 'No session' }, { status: 400 })
   }
 
   try {
