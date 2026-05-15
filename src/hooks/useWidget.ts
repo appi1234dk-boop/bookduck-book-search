@@ -69,7 +69,19 @@ export default function useWidget() {
   }, [checkUser, fetchDatabases])
 
   const handleConnect = useCallback(async () => {
-    let authUrl: string
+    // Popup must open synchronously inside the click handler — `await fetch()` first then
+    // `window.open()` is silently blocked by Safari/Chrome popup blockers, especially in
+    // Notion's cross-site iframe. We pre-open `about:blank` to claim the user gesture,
+    // then navigate it once the auth URL is ready.
+    const popup = window.open('about:blank', 'notion-auth', 'width=500,height=700')
+    if (!popup) {
+      setBanner({
+        type: 'error',
+        message: '팝업이 차단됐어요. 브라우저에서 팝업을 허용한 후 다시 시도해주세요',
+      })
+      return
+    }
+
     try {
       const res = await fetch('/api/notion/auth', {
         method: 'POST',
@@ -77,13 +89,12 @@ export default function useWidget() {
       })
       if (!res.ok) throw new Error('Failed to start auth')
       const data = await res.json()
-      authUrl = data.authUrl
+      popup.location.href = data.authUrl
     } catch {
+      popup.close()
       setBanner({ type: 'error', message: '연결을 시작할 수 없어요. 다시 시도해주세요' })
       return
     }
-
-    const popup = window.open(authUrl, 'notion-auth', 'width=500,height=700')
 
     const interval = setInterval(async () => {
       if (popup?.closed) {
