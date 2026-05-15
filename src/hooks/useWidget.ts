@@ -71,23 +71,49 @@ export default function useWidget() {
     }
   }, [prefetchAuthUrl])
 
+  const applyUserStatus = useCallback((data: UserStatus | null) => {
+    if (!data || !data.connected) return false
+    if (data.selectedDatabaseId) {
+      setScreen('main')
+    } else {
+      setScreen('db-select')
+      fetchDatabases()
+    }
+    return true
+  }, [fetchDatabases])
+
   // Initialize
   useEffect(() => {
     async function init() {
       const data = await checkUser()
-      if (!data || !data.connected) {
+      if (!applyUserStatus(data)) {
         setScreen('onboarding')
         prefetchAuthUrl()
-      } else if (!data.selectedDatabaseId) {
-        setScreen('db-select')
-        fetchDatabases()
-      } else {
-        setScreen('main')
       }
       setLoading(false)
     }
     init()
-  }, [checkUser, fetchDatabases, prefetchAuthUrl])
+  }, [checkUser, applyUserStatus, prefetchAuthUrl])
+
+  // Re-check when the iframe regains visibility/focus.
+  // Mobile Notion app opens OAuth in Safari (separate app), so the popup-close polling
+  // we run in handleConnect never observes anything — when the user switches back to
+  // Notion, the iframe needs another signal to know auth completed. visibilitychange +
+  // focus cover the common return paths (app switch, tab switch, popup close on desktop).
+  useEffect(() => {
+    if (screen !== 'onboarding') return
+    async function recheck() {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      const data = await checkUser()
+      applyUserStatus(data)
+    }
+    document.addEventListener('visibilitychange', recheck)
+    window.addEventListener('focus', recheck)
+    return () => {
+      document.removeEventListener('visibilitychange', recheck)
+      window.removeEventListener('focus', recheck)
+    }
+  }, [screen, checkUser, applyUserStatus])
 
   const handleConnect = useCallback(() => {
     if (!authUrl) {
@@ -114,14 +140,7 @@ export default function useWidget() {
       if (popup.closed) {
         clearInterval(interval)
         const data = await checkUser()
-        if (data?.connected) {
-          if (data.selectedDatabaseId) {
-            setScreen('main')
-          } else {
-            setScreen('db-select')
-            fetchDatabases()
-          }
-        } else {
+        if (!applyUserStatus(data)) {
           // OAuth failed or cancelled — refresh the URL so a retry doesn't reuse a stale state.
           prefetchAuthUrl()
         }
@@ -129,7 +148,7 @@ export default function useWidget() {
     }, 500)
 
     setTimeout(() => clearInterval(interval), 300000)
-  }, [authUrl, checkUser, fetchDatabases, prefetchAuthUrl])
+  }, [authUrl, checkUser, applyUserStatus, prefetchAuthUrl])
 
   // Keep ref in sync so the 401 banner action calls the latest handler.
   useEffect(() => {
